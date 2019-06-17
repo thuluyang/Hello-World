@@ -1,0 +1,46 @@
+DROP DATABASE IF EXISTS  b2b_crtd_idml CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_aria_active  CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_aria_hist CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_aria_tmp CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_axis_active  CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_axis_hist CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_mica_active CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_mica_hist  CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_paymentmanager_reports_active  CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_paymentmanager_reports_hist CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_rass_active CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_rass_hist CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_rdmanager_active CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_rdmanager_hist  CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_rdmanager_tmp CASCADE;
+
+DROP DATABASE IF EXISTS  b2b_stg_rpa_active CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_rpa_hist CASCADE;
+
+
+DROP DATABASE IF EXISTS b2b_stg_salesforce_active CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_salesforce_hist CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_sigma_tmp CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_sigma_active CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_sigma_hist CASCADE;
+
+DROP DATABASE IF EXISTS b2b_stg_telstranow_active CASCADE;
+DROP DATABASE IF EXISTS b2b_stg_telstranow_hist CASCADE;
+
+DROP DATABASE IF EXISTS  b2b_stg_agmc_active CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_agmc_hist CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_flexcab_active CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_flexcab_hist CASCADE;
+
+DROP DATABASE IF EXISTS  b2b_stg_ffnc_active CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_ffnc_hist CASCADE;
+
+DROP DATABASE IF EXISTS  b2b_stg_oneform_active CASCADE;
+DROP DATABASE IF EXISTS  b2b_stg_oneform_hist CASCADE;
