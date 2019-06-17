@@ -36,7 +36,7 @@ def executeDDL(filename):
       # if the command is empty commands, with whitespace, \n or \t, then below command will not be executed.
         try:
           if "/mnt/" not in command:
-            sql.replace("/data/","/mnt/data/")
+            command=command.replace("/data/","/mnt/data/")
           spark.sql(command)
           print("DDL command\n" + command + "\nis executed successfully.\n")
         except Exception as ex:
@@ -52,8 +52,11 @@ dbfs_path="/mnt/data/b2b/"
 # hdfs_path=sys.argv[2]
 # adfs_path=sys.argv[3]
 
-##Iterate thru the HQL files in a folder
-for filename in os.listdir(directory):
-    if filename.endswith(".hql"):
-      #inplace_change(directory+filename,hdfs_path,dbfs_path)
-      executeDDL(directory+filename)
+#execute 1 single ddl
+executeDDL("/dbfs/FileStore/ddlfiles_yang/rd_manager.hql")
+
+#Iterate thru the HQL files in a folder
+# for filename in os.listdir(directory):
+#     if filename.endswith(".hql"):
+#       #inplace_change(directory+filename,hdfs_path,dbfs_path)
+#       executeDDL(directory+filename)
