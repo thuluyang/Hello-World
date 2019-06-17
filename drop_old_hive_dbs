@@ -1,0 +1,45 @@
+DROP DATABASE IF EXISTS   db_b2b_curated_axis_active  CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_curated_axis_historical CASCADE;
+
+DROP DATABASE IF EXISTS  b2bprod_stg_agmc_active  CASCADE;
+DROP DATABASE IF EXISTS  b2bprod_stg_agmc_hist  CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_curated_flexcab_active CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_curated_flexcab_historical CASCADE;
+
+DROP DATABASE IF EXISTS   db_b2b_curated_mica_active CASCADE;
+DROP DATABASE IF EXISTS   db_b2b_curated_mica_historical CASCADE;
+
+DROP DATABASE IF EXISTS db_b2b_curated_rass_active  CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_curated_rass_historical CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_telstranow_active CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_telstranow_historical CASCADE;
+
+DROP DATABASE IF EXISTS  b2bprod_stg_maxim_active CASCADE;
+DROP DATABASE IF EXISTS  b2bprod_stg_maxim_hist  CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_curated_rpa_active CASCADE;
+DROP DATABASE IF EXISTS   db_b2b_curated_rpa_historical CASCADE;
+DROP DATABASE IF EXISTS   db_b2b_curated_rpa_stream CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_aria_active CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_aria_historical CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_ldm  CASCADE;
+
+DROP DATABASE IF EXISTS   db_b2b_s2p_curated_paymentmanager_reports_active CASCADE;
+DROP DATABASE IF EXISTS db_b2b_s2p_curated_paymentmanager_reports_historical   CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_salesforce_active CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_salesforce_historical CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_telstranow_active CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_curated_telstranow_historical CASCADE;
+
+DROP DATABASE IF EXISTS  db_b2b_s2p_staging_aria CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_staging_salesforce CASCADE;
+
+DROP DATABASE IF EXISTS db_b2b_s2p_devuser_staging_aria_active  CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_devuser_staging_aria_hist CASCADE;
+DROP DATABASE IF EXISTS  db_b2b_s2p_staging_rd_manager CASCADE;
