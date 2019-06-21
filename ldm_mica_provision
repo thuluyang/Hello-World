@@ -1,0 +1,195 @@
+{
+    "name": "MICA_LDM_PROVISIONING",
+    "properties": {
+        "activities": [
+            {
+                "name": "INSERT_JOB_DETAILS",
+                "type": "DatabricksSparkPython",
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "pythonFile": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm/metastore/ldm_job_details.py",
+                    "parameters": [
+                        "Insert",
+                        "@pipeline().RunId",
+                        "MICA",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/config/ldm.ini"
+                    ],
+                    "libraries": [
+                        {
+                            "egg": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm_0_0_0_py2_7-81ed2.egg"
+                        }
+                    ]
+                },
+                "linkedServiceName": {
+                    "referenceName": "tcpcnd450b2bs2pdevadbint002",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "POPULATE_CUSTOMER_FACING_SERVICE_MICA",
+                "description": "",
+                "type": "DatabricksSparkPython",
+                "dependsOn": [
+                    {
+                        "activity": "INSERT_JOB_DETAILS",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "pythonFile": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm/MICA/src/legacy_customer_facing_service_mica.py",
+                    "parameters": [
+                        "@pipeline().RunId",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/MICA/cfg/JSON/ldm_entities.json",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/config/ldm.ini"
+                    ],
+                    "libraries": [
+                        {
+                            "egg": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm_0_0_0_py2_7-81ed2.egg"
+                        }
+                    ]
+                },
+                "linkedServiceName": {
+                    "referenceName": "tcpcnd450b2bs2pdevadbint002",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "POPULATE_LEGACY_LOCATION_MICA",
+                "type": "DatabricksSparkPython",
+                "dependsOn": [
+                    {
+                        "activity": "INSERT_JOB_DETAILS",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "pythonFile": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm/MICA/src/legacy_location_mica.py",
+                    "parameters": [
+                        "@pipeline().RunId",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/MICA/cfg/JSON/ldm_entities.json",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/config/ldm.ini"
+                    ],
+                    "libraries": [
+                        {
+                            "egg": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm_0_0_0_py2_7-81ed2.egg"
+                        }
+                    ]
+                },
+                "linkedServiceName": {
+                    "referenceName": "tcpcnd450b2bs2pdevadbint002",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "POPULATE_LEGACY_SITE_MICA",
+                "type": "DatabricksSparkPython",
+                "dependsOn": [
+                    {
+                        "activity": "INSERT_JOB_DETAILS",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "pythonFile": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm/MICA/src/legacy_site_mica.py",
+                    "parameters": [
+                        "@pipeline().RunId",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/MICA/cfg/JSON/ldm_entities.json",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/config/ldm.ini"
+                    ],
+                    "libraries": [
+                        {
+                            "egg": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm_0_0_0_py2_7-81ed2.egg"
+                        }
+                    ]
+                },
+                "linkedServiceName": {
+                    "referenceName": "tcpcnd450b2bs2pdevadbint002",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "UPDATE_JOB_DETAILS",
+                "type": "DatabricksSparkPython",
+                "dependsOn": [
+                    {
+                        "activity": "POPULATE_CUSTOMER_FACING_SERVICE_MICA",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "POPULATE_LEGACY_SITE_MICA",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "POPULATE_LEGACY_LOCATION_MICA",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "pythonFile": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm/metastore/ldm_job_details.py",
+                    "parameters": [
+                        "Update",
+                        "@pipeline().RunId",
+                        "MICA",
+                        "/dbfs/apps/b2b_datalake/legacy/LDM/ldm/config/ldm.ini"
+                    ],
+                    "libraries": [
+                        {
+                            "egg": "dbfs:/apps/b2b_datalake/legacy/LDM/ldm_0_0_0_py2_7-81ed2.egg"
+                        }
+                    ]
+                },
+                "linkedServiceName": {
+                    "referenceName": "tcpcnd450b2bs2pdevadbint002",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ]
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
