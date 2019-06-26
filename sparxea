@@ -1,0 +1,1112 @@
+!INC Local Scripts.EAConstants-JScript
+
+/*
+ * This code has been included from the default Diagram Script template.
+ * If you wish to modify this template, it is located in the Config\Script Templates
+ * directory of your EA install path.
+ *
+ * Script Name:
+ * Author:
+ * Purpose:
+ * Date:
+ */
+
+/*
+ * Diagram Script main function
+ */
+
+function OnDiagramScript()
+{
+// Get a reference to the current diagram
+var currentDiagram as EA.Diagram;
+var element as EA.Element;	
+currentDiagram = Repository.GetCurrentDiagram();
+element = Repository.GetElementByID(currentDiagram.SelectedObjects.GetAt(0).ElementID);
+//Select the object that contains all the parameters needed for generation of the JSON file
+var currentAttributes as EA.Collection;
+currentAttributes = element.Attributes;
+var d_obj as EA.DiagramObject;
+var da;
+var dobcnt as EA.Diagram.DiagramObjects.Count;	// --- Diagram object ount
+var tableNameArray = [];
+var key_cols = [];
+var date_pattern_cols = [];
+var k = 0;
+
+
+for (da = 0; da < currentDiagram.DiagramObjects.Count; da++) {
+	d_obj = currentDiagram.DiagramObjects.GetAt(da);
+	Current_element = Repository.GetElementByID(d_obj.ElementID);
+	if (d_obj.ElementID != currentDiagram.SelectedObjects.GetAt(0).ElementID && Current_element.Type =="Class"){
+	//exlude the selected parent element which contains the parameters
+	//	tableNameArray[da] = Current_element.Name;
+	tableNameArray.push(Current_element.Name);
+	var Current_Attributes as EA.Collection;
+	Current_Attributes = Current_element.Attributes;
+	key_cols[k]=[];
+	date_pattern_cols[k]=[];
+			for (var i=0; i < Current_Attributes.Count; i++){
+			if (Current_Attributes.GetAt(i).IsOrdered){
+			//Find the primary keys of the tables
+			key_cols[k].push(Current_Attributes.GetAt(i).Name);
+			}
+			if(Current_Attributes.GetAt(i).Type == "TIMESTAMP" || Current_Attributes.GetAt(i).Type == "timestamp" ){
+			date_pattern_cols[k].push(Current_Attributes.GetAt(i).Name);
+			}
+			}	
+		k++;
+}
+}
+
+
+var jsonfile = {};
+var source = element.TaggedValues.GetByName("source").Value;
+var feed_id = element.TaggedValues.GetByName("feed_id").Value;
+//var seq_type =  element.TaggedValues.GetByName("seq_type").Value;
+var initial_seq_id = element.TaggedValues.GetByName("initial_seq_id").Value;
+//var seq_pattern = element.TaggedValues.GetByName("seq_pattern").Value;
+var schemaFilePath = element.TaggedValues.GetByName("schemaFilePath").Value;
+//var filePattern = element.TaggedValues.GetByName("filePattern").Value;
+var cdc = element.TaggedValues.GetByName("cdc").Value;
+//var format = element.TaggedValues.GetByName("format").Value;
+var expected_ext_count = parseInt(tableNameArray.length);
+var file_date_format = element.TaggedValues.GetByName("file_date_format").Value;
+//file_date_format is the file(ctr,data...) name format
+var date_pattern_format = element.TaggedValues.GetByName("date_pattern_format").Value;
+//date_pattern_format is the column date format
+var ingestionconfig = {  
+      "source": source,
+      "app":"Replicator",
+      "hdfs_home_dir":"/data/b2b",
+      "feed_id": feed_id,
+	  "seq_type": "date",
+	   "file_sensor": {
+        "expected_ext": "eot",
+        "expected_ext_count": expected_ext_count
+        } ,
+      "location":{  
+         "base_dir":"/home/sfxuser/B2B_DATALAKE/data/b2b/land/ADBOR/",
+         "input_dir":"Input",
+         "error_dir":"Error",
+		"archive_dir": "Archive",
+         "unzipped_dir":"src"
+      },
+        "start_sequence": {
+            "initial_seq_id": initial_seq_id,
+            "seq_pattern": "%Y%m%d"
+		}
+};
+
+jsonfile.ingestion_config = ingestionconfig;
+
+var datafeed = {};
+for (i=0; i<tableNameArray.length; i++){
+//datafeed[tableNameArray[i]] = addTable(tableNameArray[i],schemaFilePath,tableNameArray[i]+".csv","MAXIM_"+tableNameArray[i].replace(/_/g,"-")+"_(<batch_seq>)_*", key_cols[i],file_date_format, date_pattern_cols[i],date_pattern_format);
+datafeed[tableNameArray[i]] = addTable(tableNameArray[i],schemaFilePath,tableNameArray[i]+".csv","Initialextract_"+tableNameArray[i]+"_20190417_IT(<batch_seq>)*", key_cols[i],file_date_format, date_pattern_cols[i],date_pattern_format);
+	}
+	
+jsonfile.ingestion_config.datafeed = datafeed;
+
+var myJSON = JSON.stringify(jsonfile, null, 4);
+//Change jsonfile to well formatted myJSON file.
+	
+var Jsonfilename = element.TaggedValues.GetByName("configJsonName").Value;
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+var a = fso.CreateTextFile("C:\\tmp\\" +Jsonfilename, true);
+
+a.WriteLine(myJSON);
+a.Close();
+
+var dag_delta_json ={
+  "dag": {
+    "source": source,
+    "owner": "airflow",
+    "dag_name": "Service_DailyDelta",
+    "suffix": "",
+    "start_date": "2019-04-20 09:00:00",
+    "schedule": {
+        "dag_interval": "0 9 1 * *"
+    },
+    "app_root_path": "/home/sfxuser/B2B_DATALAKE/apps/b2b_datalake/legacy/ADBOR/",
+    "config_file": "cfg/JSON/" + Jsonfilename,
+    "tasks": {
+      "file_sensor": {
+     "task_id": "DailyDelta_file_sensor",
+        "airflow_task_type": "bash",
+        "params": [
+        ]
+        } ,
+      "file_validation": {
+        "task_id": "DailyDelta_file_validation",
+        "airflow_task_type": "bash",
+        "params": [
+        ]
+      },
+      "cdc": {
+        "task_id": "DailyDelta_cdc",
+        "airflow_task_type": "bash",
+        "params": [
+          {"cdc_pattern": "delta_load"}
+        ]
+      },
+      "archive": {
+        "task_id": "DailyDelta_archive",
+        "airflow_task_type": "bash",
+        "params": [
+        ]
+      }
+    },
+    "chain": [
+      [ "file_sensor",
+        "file_validation",
+        "cdc",
+        "archive"
+      ]
+    ]
+  }
+}
+
+var dag_delta_filename = element.TaggedValues.GetByName("dagName").Value;
+//dag file name 
+var dag_delta = JSON.stringify(dag_delta_json, null, 4);
+var b = fso.CreateTextFile("c:\\tmp\\" +dag_delta_filename, true);
+b.WriteLine(dag_delta);
+b.Close();
+/*
+if ( currentDiagram != null ){
+	var allObjects as EA.Collection;
+	allObjects = currentDiagram.DiagramObjects;
+	var table ;
+	if ( allObjects.Count > 0 ){
+		Session.Output(allObjects.Count)
+		for (ti = 0; ti < allObjects.Count; ti++) {
+			obj = allObjects.GetAt(ti);
+			table = Repository.GetElementByID(obj.ElementID);
+			if (obj.ElementID != currentDiagram.SelectedObjects.GetAt(0).ElementID){
+				//Session.Output("table name is "+table.Name);
+				GenerateCSVTable(table);
+			}
+	}
+Session.Output( "part 1 done!");
+}
+	else{
+// Nothing is selected
+Session.Prompt( "Nothing is in this diagram.", promptOK)
+		}
+}
+
+	else{
+	Session.Prompt( "This script requires a diagram to be visible.", promptOK)
+		}*/
+}
+
+// ==================================================
+
+// This function is for Add the table JSON section in the JSON file
+// passing different parameters str_gs = asc(29)
+// ==================================================
+function addTable(inputTableName,schemaFilePath,schemaFileName,filePattern,key_cols,file_date_format, date_patterns,date_pattern_format){
+	var inputTableName  = {  
+            "config_path":schemaFilePath + schemaFileName,
+            "cdc":"N",
+            "format":"delimited",
+		    "delimiter":"|*#*|",
+            "validation":{  
+               "triplet_check":{  
+                  "file_pattern":filePattern,
+                  "file_extensions":[  
+                     "dat",
+                     "ctl",
+                     "eot"
+                  ],
+                  "file_count":3
+               },
+               "file_date_format": file_date_format,
+               "record_count_validation":{  
+                        "header": "N",
+                        "footer": "N",
+                        "rec_cnt_pos_ctl": "1"
+               }
+            },
+            "cdc_config":{  
+               "history_table":"b2bprd_stg_adbor_hist." + inputTableName + "_historical",
+               "active_table":"b2bprd_stg_adbor_active." + inputTableName,
+               "key_cols":key_cols,
+               "update_ts_col":"b2b_insert_timestamp",
+               "custom_cdc_query":""
+            }};
+	var datafeed = {};
+	var date_pattern = {};
+for (var j=0; date_patterns != null && j< date_patterns.length; j++ ){
+    date_pattern[date_patterns[j]]= date_pattern_format;}
+	inputTableName["date_pattern"] = date_pattern;
+	datafeed[inputTableName] = inputTableName;
+	return (datafeed[inputTableName]);
+}
+
+//  json2.js
+//  2017-06-12
+//  Public Domain.
+
+//      JSON.stringify(value, replacer, space)
+//          value       any JavaScript value, usually an object or array.
+//          replacer    an optional parameter that determines how object
+//                      values are stringified for objects. It can be a
+//                      function or an array of strings.
+//          space       an optional parameter that specifies the indentation
+//                      of nested structures. If it is omitted, the text will
+//                      be packed without extra whitespace. If it is a number,
+//                      it will specify the number of spaces to indent at each
+//                      level. If it is a string (such as "\t" or "&nbsp;"),
+//                      it contains the characters used to indent at each level.
+//          This method produces a JSON text from a JavaScript value.
+//          When an object value is found, if the object contains a toJSON
+//          method, its toJSON method will be called and the result will be
+//          stringified. A toJSON method does not serialize: it returns the
+//          value represented by the name/value pair that should be serialized,
+//          or undefined if nothing should be serialized. The toJSON method
+//          will be passed the key associated with the value, and this will be
+//          bound to the value.
+
+//          For example, this would serialize Dates as ISO strings.
+
+//              Date.prototype.toJSON = function (key) {
+//                  function f(n) {
+//                      // Format integers to have at least two digits.
+//                      return (n < 10)
+//                          ? "0" + n
+//                          : n;
+//                  }
+//                  return this.getUTCFullYear()   + "-" +
+//                       f(this.getUTCMonth() + 1) + "-" +
+//                       f(this.getUTCDate())      + "T" +
+//                       f(this.getUTCHours())     + ":" +
+//                       f(this.getUTCMinutes())   + ":" +
+//                       f(this.getUTCSeconds())   + "Z";
+//              };
+
+//          You can provide an optional replacer method. It will be passed the
+//          key and value of each member, with this bound to the containing
+//          object. The value that is returned from your method will be
+//          serialized. If your method returns undefined, then the member will
+//          be excluded from the serialization.
+
+//          If the replacer parameter is an array of strings, then it will be
+//          used to select the members to be serialized. It filters the results
+//          such that only members with keys listed in the replacer array are
+//          stringified.
+
+//          Values that do not have JSON representations, such as undefined or
+//          functions, will not be serialized. Such values in objects will be
+//          dropped; in arrays they will be replaced with null. You can use
+//          a replacer function to replace those with JSON values.
+
+//          JSON.stringify(undefined) returns undefined.
+
+//          The optional space parameter produces a stringification of the
+//          value that is filled with line breaks and indentation to make it
+//          easier to read.
+
+//          If the space parameter is a non-empty string, then that string will
+//          be used for indentation. If the space parameter is a number, then
+//          the indentation will be that many spaces.
+
+//          Example:
+
+//          text = JSON.stringify(["e", {pluribus: "unum"}]);
+//          // text is '["e",{"pluribus":"unum"}]'
+
+//          text = JSON.stringify(["e", {pluribus: "unum"}], null, "\t");
+//          // text is '[\n\t"e",\n\t{\n\t\t"pluribus": "unum"\n\t}\n]'
+
+//          text = JSON.stringify([new Date()], function (key, value) {
+//              return this[key] instanceof Date
+//                  ? "Date(" + this[key] + ")"
+//                  : value;
+//          });
+//          // text is '["Date(---current time---)"]'
+
+//      JSON.parse(text, reviver)
+//          This method parses a JSON text to produce an object or array.
+//          It can throw a SyntaxError exception.
+
+//          The optional reviver parameter is a function that can filter and
+//          transform the results. It receives each of the keys and values,
+//          and its return value is used instead of the original value.
+//          If it returns what it received, then the structure is not modified.
+//          If it returns undefined then the member is deleted.
+
+//          Example:
+
+//          // Parse the text. Values that look like ISO date strings will
+//          // be converted to Date objects.
+
+//          myData = JSON.parse(text, function (key, value) {
+//              var a;
+//              if (typeof value === "string") {
+//                  a =
+//   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(value);
+//                  if (a) {
+//                      return new Date(Date.UTC(
+//                         +a[1], +a[2] - 1, +a[3], +a[4], +a[5], +a[6]
+//                      ));
+//                  }
+//                  return value;
+//              }
+//          });
+
+//          myData = JSON.parse(
+//              "[\"Date(09/09/2001)\"]",
+//              function (key, value) {
+//                  var d;
+//                  if (
+//                      typeof value === "string"
+//                      && value.slice(0, 5) === "Date("
+//                      && value.slice(-1) === ")"
+//                  ) {
+//                      d = new Date(value.slice(5, -1));
+//                      if (d) {
+//                          return d;
+//                      }
+//                  }
+//                  return value;
+//              }
+//          );
+
+//  This is a reference implementation. You are free to copy, modify, or
+//  redistribute.
+
+/*jslint
+    eval, for, this
+*/
+
+/*property
+    JSON, apply, call, charCodeAt, getUTCDate, getUTCFullYear, getUTCHours,
+    getUTCMinutes, getUTCMonth, getUTCSeconds, hasOwnProperty, join,
+    lastIndex, length, parse, prototype, push, replace, slice, stringify,
+    test, toJSON, toString, valueOf
+*/
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+if (typeof JSON !== "object") {
+    JSON = {};
+}
+
+(function () {
+    "use strict";
+
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return (n < 10)
+            ? "0" + n
+            : n;
+    }
+
+    function this_value() {
+        return this.valueOf();
+    }
+
+    if (typeof Date.prototype.toJSON !== "function") {
+
+        Date.prototype.toJSON = function () {
+
+            return isFinite(this.valueOf())
+                ? (
+                    this.getUTCFullYear()
+                    + "-"
+                    + f(this.getUTCMonth() + 1)
+                    + "-"
+                    + f(this.getUTCDate())
+                    + "T"
+                    + f(this.getUTCHours())
+                    + ":"
+                    + f(this.getUTCMinutes())
+                    + ":"
+                    + f(this.getUTCSeconds())
+                    + "Z"
+                )
+                : null;
+        };
+
+        Boolean.prototype.toJSON = this_value;
+        Number.prototype.toJSON = this_value;
+        String.prototype.toJSON = this_value;
+    }
+
+    var gap;
+    var indent;
+    var meta;
+    var rep;
+
+
+ function quote(string) {
+
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
+
+        rx_escapable.lastIndex = 0;
+        return rx_escapable.test(string)
+            ? "\"" + string.replace(rx_escapable, function (a) {
+                var c = meta[a];
+                return typeof c === "string"
+                    ? c
+                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+            }) + "\""
+            : "\"" + string + "\"";
+    }
+
+
+    function str(key, holder) {
+
+// Produce a string from holder[key].
+
+        var i;          // The loop counter.
+        var k;          // The member key.
+        var v;          // The member value.
+        var length;
+        var mind = gap;
+        var partial;
+        var value = holder[key];
+
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (
+            value
+            && typeof value === "object"
+            && typeof value.toJSON === "function"
+        ) {
+            value = value.toJSON(key);
+        }
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === "function") {
+            value = rep.call(holder, key, value);
+        }
+
+// What happens next depends on the value's type.
+
+        switch (typeof value) {
+        case "string":
+            return quote(value);
+
+        case "number":
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return (isFinite(value))
+                ? String(value)
+                : "null";
+
+        case "boolean":
+        case "null":
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce "null". The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is "object", we might be dealing with an object or an array or
+// null.
+
+        case "object":
+
+// Due to a specification blunder in ECMAScript, typeof null is "object",
+// so watch out for that case.
+
+            if (!value) {
+                return "null";
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === "[object Array]") {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || "null";
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? "[]"
+                    : gap
+                        ? (
+                            "[\n"
+                            + gap
+                            + partial.join(",\n" + gap)
+                            + "\n"
+                            + mind
+                            + "]"
+                        )
+                        : "[" + partial.join(",") + "]";
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === "object") {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === "string") {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                (gap)
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                for (k in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                (gap)
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? "{}"
+                : gap
+                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
+                    : "{" + partial.join(",") + "}";
+            gap = mind;
+            return v;
+        }
+    }
+
+// If the JSON object does not yet have a stringify method, give it one.
+
+    if (typeof JSON.stringify !== "function") {
+        meta = {    // table of character substitutions
+            "\b": "\\b",
+            "\t": "\\t",
+            "\n": "\\n",
+            "\f": "\\f",
+            "\r": "\\r",
+            "\"": "\\\"",
+            "\\": "\\\\"
+        };
+        JSON.stringify = function (value, replacer, space) {
+
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
+
+            var i;
+            gap = "";
+            indent = "";
+
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
+
+            if (typeof space === "number") {
+                for (i = 0; i < space; i += 1) {
+                    indent += " ";
+                }
+
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === "string") {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== "function" && (
+                typeof replacer !== "object"
+                || typeof replacer.length !== "number"
+            )) {
+                throw new Error("JSON.stringify");
+            }
+
+// Make a fake root object containing our value under the key of "".
+// Return the result of stringifying the value.
+
+            return str("", {"": value});
+        };
+    }
+
+
+// If the JSON object does not yet have a parse method, give it one.
+
+    if (typeof JSON.parse !== "function") {
+        JSON.parse = function (text, reviver) {
+
+// The parse method takes a text and an optional reviver function, and returns
+// a JavaScript value if the text is a valid JSON text.
+
+            var j;
+
+            function walk(holder, key) {
+
+// The walk method is used to recursively walk the resulting structure so
+// that modifications can be made.
+
+                var k;
+                var v;
+                var value = holder[key];
+                if (value && typeof value === "object") {
+                    for (k in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, k)) {
+                            v = walk(value, k);
+                            if (v !== undefined) {
+                                value[k] = v;
+                            } else {
+                                delete value[k];
+                            }
+                        }
+                    }
+                }
+                return reviver.call(holder, key, value);
+            }
+
+
+// Parsing happens in four stages. In the first stage, we replace certain
+// Unicode characters with escape sequences. JavaScript handles many characters
+// incorrectly, either silently deleting them, or treating them as line endings.
+
+            text = String(text);
+            rx_dangerous.lastIndex = 0;
+            if (rx_dangerous.test(text)) {
+                text = text.replace(rx_dangerous, function (a) {
+                    return (
+                        "\\u"
+                        + ("0000" + a.charCodeAt(0).toString(16)).slice(-4)
+                    );
+                });
+            }
+
+// In the second stage, we run the text against regular expressions that look
+// for non-JSON patterns. We are especially concerned with "()" and "new"
+// because they can cause invocation, and "=" because it can cause mutation.
+// But just to be safe, we want to reject all unexpected forms.
+
+// We split the second stage into 4 regexp operations in order to work around
+// crippling inefficiencies in IE's and Safari's regexp engines. First we
+// replace the JSON backslash pairs with "@" (a non-JSON character). Second, we
+// replace all simple value tokens with "]" characters. Third, we delete all
+// open brackets that follow a colon or comma or that begin the text. Finally,
+// we look to see that the remaining characters are only whitespace or "]" or
+// "," or ":" or "{" or "}". If that is so, then the text is safe for eval.
+
+            if (
+                rx_one.test(
+                    text
+                        .replace(rx_two, "@")
+                        .replace(rx_three, "]")
+                        .replace(rx_four, "")
+                )
+            ) {
+
+// In the third stage we use the eval function to compile the text into a
+// JavaScript structure. The "{" operator is subject to a syntactic ambiguity
+// in JavaScript: it can begin a block or an object literal. We wrap the text
+// in parens to eliminate the ambiguity.
+
+                j = eval("(" + text + ")");
+
+// In the optional fourth stage, we recursively walk the new structure, passing
+// each name/value pair to a reviver function for possible transformation.
+
+                return (typeof reviver === "function")
+                    ? walk({"": j}, "")
+                    : j;
+            }
+
+// If the text is not JSON parseable, then a SyntaxError is thrown.
+
+            throw new SyntaxError("JSON.parse");
+        };
+    }
+}());
+
+
+function GenerateCsvDdl() {
+    // Get a reference to the current diagram
+    var currentDiagram as EA.Diagram;
+    currentDiagram = Repository.GetCurrentDiagram();
+
+    if (currentDiagram != null) {
+        // Get a reference to any selected connector/objects
+        var allObjects as EA.Collection;
+        allObjects = currentDiagram.DiagramObjects;
+
+        var fileSystemObject = new ActiveXObject("Scripting.FileSystemObject");
+
+        // Create sql file for create tables
+        Session.Output("=======================================");
+
+        Session.Output("Generating ddls");
+        
+        var ddl_create_file = fileSystemObject.CreateTextFile("c:\\tmp\\ddl_create.hql", true);
+
+        ddl_create_file.WriteLine( "create database IF NOT EXISTS b2bprd_stg_adbor_active" );
+        ddl_create_file.WriteLine( "location '/data/b2b/staging/active/adbor/';" );
+        ddl_create_file.WriteLine( "\n" );
+        ddl_create_file.WriteLine( "create database IF NOT EXISTS b2bprd_stg_adbor_hist" );
+        ddl_create_file.WriteLine( "location '/data/b2b/staging/historical/adbor/';" );
+        ddl_create_file.WriteLine( "\n" );
+
+        //Session.Output( "1")
+        //Session.Output( allObjects.Count)
+        //selectedObjects.ObjectType
+
+        if (allObjects.Count > 0) {
+            // Create sql file for drop tables
+            var ddl_drop_file = fileSystemObject.CreateTextFile("c:\\tmp\\ddl_drop.hql", true);
+            //Session.Output( "2")
+            //Session.Output( allObjects.Count)
+
+            //for (obj in allObjects) {
+            for (ti = 0; ti < allObjects.Count; ti++) {
+                //Session.Output(ti)
+                obj = allObjects.GetAt(ti);
+                var table as EA.Element;
+                table = Repository.GetElementByID(obj.ElementID);
+                tableName = table.Name;
+
+                //Session.Output(table.Name);
+
+                ///////////////////////////////////////////////
+                // for each table, generate csv and ddl
+
+                //GenerateCSVTable(table);
+                Session.Output("=======================================");
+				
+                Session.Output("Table " + (ti+1).toString() + "/" + allObjects.Count.toString());
+
+                Session.Output("CSV exporting for Table: " + tableName);
+            
+                //Get the tag of the table
+
+                var taggedValuesTable as EA.Collection;
+
+                taggedValuesTable = table.TaggedValues;
+
+                var taggedValueTable as EA.TaggedValue;
+
+                var tagTable;
+
+                tagTable = "N";
+				//tagTable = "Y";
+
+                //for (taggedValueTable in taggedValuesTable) {
+
+                for (i = 0; i < taggedValuesTable.Count; i++) {
+
+                    taggedValueTable = taggedValuesTable.GetAt(i);
+
+                    if (taggedValueTable.Name == "Hive" && taggedValueTable.Value == "Y") {
+
+                        Session.Output("Table: " + tableName + " is included")
+
+                        tagTable = "Y"
+
+                    }
+
+                }
+
+                //
+                if (tagTable == "Y" ) {
+
+                    var thePackage as EA.Package;
+
+                    thePackage = Repository.GetPackageByID(table.PackageID);
+
+                    var theElements as EA.Collection;
+
+                    theElements = thePackage.Elements;
+
+                    //'loop through attributes and tagged values
+
+                    var currentAttributes as EA.Collection;
+
+                    var currentAttribute as EA.Attribute;
+
+                    currentAttributes = table.Attributes;
+
+
+                    //for ( currentAttribute in currentAttributes){
+
+                    var arrayColumn = [];
+
+
+                    for (j = 0; j < currentAttributes.Count; j++) {
+
+                        currentAttribute = currentAttributes.GetAt(j);
+
+                        var taggedValuesColumn as EA.Collection;
+
+                        taggedValuesColumn = currentAttribute.TaggedValues;
+
+                        var taggedValueColumn as EA.TaggedValue;
+
+                        var tagColumn;
+
+                        tagColumn = "N";
+                        tagColumn = "N";
+						//tagColumn = "Y";
+
+                        //for ( taggedValueColumn in taggedValuesColumn ) {
+
+                        for (k = 0; k < taggedValuesColumn.Count; k++) {
+
+                            taggedValueColumn = taggedValuesColumn.GetAt(k);
+
+                            if (taggedValueColumn.Name == "Hive" && taggedValueColumn.Value == "Y") {
+
+                                //Session.Output( "Column: " + currentAttribute.Name + " is included" )
+
+                                tagColumn = "Y"
+
+                            }
+
+                            var seqColumn;
+
+
+                            if (taggedValueColumn.Name == "SEQ") {
+
+                                seqColumn = taggedValueColumn.Value
+
+                            }
+
+                        }
+
+
+                        if (tagColumn == "Y") {
+
+                            var lineWrite;
+
+                            var lineColumn;
+
+                            var columnName;
+
+                            var columnType;
+
+                            var columnLength;
+
+                            columnName = currentAttribute.Name;
+
+                            columnType = currentAttribute.Type;
+
+                            columnLength = currentAttribute.Length;
+
+                            // change data types varchar to string, no length, decimal must has a precision
+                            if (columnType == "S9") {
+
+                                columnType = "BIGINT";
+
+                            }
+
+
+                            if (columnType == "S9V9") {
+
+                                columnType = "DECIMAL(15,7)";
+
+                            }
+
+
+                            if (columnType == "char" || columnType == "Char") {
+
+                                columnType = "STRING";
+
+                            }
+
+
+                            if (columnType == "VARCHAR") {
+
+                                columnType = "STRING";
+
+                            }
+                        
+                            if (columnType == "VARCHAR2") {
+
+                                columnType = "STRING";
+
+                            }
+
+                            lineWrite = columnName + "," + columnType;
+
+                            lineColumn = columnName + " " + columnType + " , "
+
+                            //outputFile.WriteLine( lineWrite );
+
+                            var objColumn;
+
+                            objColumn = {
+                                "seq": seqColumn,
+                                "line": lineWrite,
+                                "column": lineColumn
+                            };
+                            //Session.Output( "Column: " + objColumn.line + " is pushed" )
+
+                            arrayColumn.push(objColumn);
+
+                        } // end of if tagcolumn
+
+                    } // end of for attr
+
+                    arrayColumn.sort(function(a, b) {
+                        return a.seq - b.seq
+                    });
+                    //Session.Output( "Column count: " + arrayColumn.length  )
+                        
+                    var outputFile = fileSystemObject.CreateTextFile("c:\\tmp\\" + tableName + ".csv", true);
+
+                    for (k = 0; k < arrayColumn.length; k++) {
+                        //Session.Output( "Column: " + arrayColumn[k].line + " is written" )
+                        outputFile.WriteLine(arrayColumn[k].line);
+                    }
+
+                    //' Close the output file
+
+                    outputFile.Close();
+					
+
+                    ddl_create_file.WriteLine( "CREATE EXTERNAL TABLE IF NOT EXISTS b2bprd_stg_adbor_active." + tableName + " " );
+                    ddl_create_file.WriteLine( "(" );
+
+                    for (k = 0; k < arrayColumn.length; k++) {
+                        //Session.Output( "Column: " + arrayColumn[k].line + " is written" )
+                        ddl_create_file.WriteLine("        " + arrayColumn[k].column);
+                    }
+
+                    ddl_create_file.WriteLine( "        b2b_batch_id string comment'', " );
+                    ddl_create_file.WriteLine( "        b2b_insert_timestamp timestamp comment'', " );
+                    ddl_create_file.WriteLine( "        b2b_key string comment'' " );
+                    ddl_create_file.WriteLine( " ) " );
+                    ddl_create_file.WriteLine( "STORED AS PARQUET " );
+                    ddl_create_file.WriteLine( "LOCATION '/data/b2b/staging/active/adbor/" + tableName + "'; " );
+                    ddl_create_file.WriteLine( " " );
+
+                    ddl_drop_file.WriteLine( "DROP TABLE IF EXISTS b2bprd_stg_adbor_active." + tableName + ";" );
+                    ddl_drop_file.WriteLine( " " );
+                    
+
+                    ddl_create_file.WriteLine( "CREATE EXTERNAL TABLE IF NOT EXISTS b2bprd_stg_adbor_hist." + tableName + "_historical " );
+                    ddl_create_file.WriteLine( "(" );
+
+                    for (k = 0; k < arrayColumn.length; k++) {
+                        //Session.Output( "Column: " + arrayColumn[k].line + " is written" )
+                        ddl_create_file.WriteLine("        " + arrayColumn[k].column);
+                    }
+
+                    ddl_create_file.WriteLine( "        b2b_batch_id string comment'', " );
+                    ddl_create_file.WriteLine( "        b2b_insert_timestamp timestamp comment'', " );
+                    ddl_create_file.WriteLine( "        b2b_key string comment'' " );
+                    ddl_create_file.WriteLine( " ) " );
+                    ddl_create_file.WriteLine( "STORED AS PARQUET " );
+                    ddl_create_file.WriteLine( "LOCATION '/data/b2b/staging/historical/adbor/" + tableName + "_historical'; " );
+                    ddl_create_file.WriteLine( " " );
+                    ddl_create_file.WriteLine( " " );
+
+                    ddl_drop_file.WriteLine( "DROP TABLE IF EXISTS b2bprd_stg_adbor_hist." + tableName + "_historical;" );
+                    ddl_drop_file.WriteLine( " " );
+                    ddl_drop_file.WriteLine( " " );
+
+					
+					var ddl_create_file_table = fileSystemObject.CreateTextFile("c:\\tmp\\" + tableName + ".hql", true);
+					
+
+                    ddl_create_file_table.WriteLine( "CREATE EXTERNAL TABLE IF NOT EXISTS b2bprd_stg_adbor_active." + tableName + " " );
+                    ddl_create_file_table.WriteLine( "(" );
+
+                    for (k = 0; k < arrayColumn.length; k++) {
+                        //Session.Output( "Column: " + arrayColumn[k].line + " is written" )
+                        ddl_create_file_table.WriteLine("        " + arrayColumn[k].column);
+                    }
+
+                    ddl_create_file_table.WriteLine( "        b2b_batch_id string comment'', " );
+                    ddl_create_file_table.WriteLine( "        b2b_insert_timestamp timestamp comment'', " );
+                    ddl_create_file_table.WriteLine( "        b2b_key string comment'' " );
+                    ddl_create_file_table.WriteLine( " ) " );
+                    ddl_create_file_table.WriteLine( "STORED AS PARQUET " );
+                    ddl_create_file_table.WriteLine( "LOCATION '/data/b2b/staging/active/adbor/" + tableName + "'; " );
+                    ddl_create_file_table.WriteLine( " " );
+
+                    ddl_create_file_table.WriteLine( "CREATE EXTERNAL TABLE IF NOT EXISTS b2bprd_stg_adbor_hist." + tableName + "_historical " );
+                    ddl_create_file_table.WriteLine( "(" );
+
+                    for (k = 0; k < arrayColumn.length; k++) {
+                        //Session.Output( "Column: " + arrayColumn[k].line + " is written" )
+                        ddl_create_file_table.WriteLine("        " + arrayColumn[k].column);
+                    }
+
+                    ddl_create_file_table.WriteLine( "        b2b_batch_id string comment'', " );
+                    ddl_create_file_table.WriteLine( "        b2b_insert_timestamp timestamp comment'', " );
+                    ddl_create_file_table.WriteLine( "        b2b_key string comment'' " );
+                    ddl_create_file_table.WriteLine( " ) " );
+                    ddl_create_file_table.WriteLine( "STORED AS PARQUET " );
+                    ddl_create_file_table.WriteLine( "LOCATION '/data/b2b/staging/historical/adbor/" + tableName + "_historical'; " );					
+
+					ddl_create_file_table.Close();
+				
+					Session.Output( tableName + " done!");
+
+                } // end of if table
+
+
+                // end of one table
+
+            }
+			ddl_create_file.Close();
+			ddl_drop_file.Close();
+            Session.Output("All done!");
+
+        } else {
+            // Nothing is selected
+            Session.Prompt("Nothing is in this diagram.", promptOK)
+        }
+    } else {
+        Session.Prompt("This script requires a diagram to be visible.", promptOK)
+    }
+}
+
+
+	
+OnDiagramScript();
+GenerateCsvDdl();
